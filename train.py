@@ -94,7 +94,10 @@ def train(args):
             val_loss = rec_loss + qua_loss + pre_loss
 
             if val_loss < best_validation:
-                logging.info(f"[{epoch + 1}/{args.n_epochs}] Better validation loss found: {val_loss.round(5)}, saving model")
+                logging.info(f"[{epoch + 1}/{args.n_epochs}] Better validation loss found: "
+                             f"recon loss: {round(rec_loss.item(), 4)},"
+                             f"qua loss: {round(qua_loss.item(), 4)},"
+                             f"pre loss: {round(pre_loss.item(), 4)}, saving model")
                 best_validation = val_loss
 
                 torch.save(model, f'./data/models/{model_name}')
