@@ -4,11 +4,12 @@ import logging
 from datetime import date
 
 import torch
+import numpy as np
 from torch.utils.data import DataLoader
 
 from models.SiameseAutoencoder import SiameseAutoencoder
 from loss_functions import quantization_loss, preservation_loss
-from helpers import load_vectors, SiameseDataset
+from helpers import load_vectors, SiameseDataset, load_20ng_data, preprocess_20ng_data
 
 EMBEDDING_SIZE = 300
 logging.basicConfig(level=logging.INFO)
@@ -38,9 +39,8 @@ def main():
 
 def train(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    best_validation = float("inf")
+    best_validation = 0.0
     num_not_improved = 0
-    num_pretrain = 100
 
     if not args.modelname:
         model_name = date.today().strftime("%d-%m-%Y")
@@ -51,14 +51,21 @@ def train(args):
     recon_loss = torch.nn.MSELoss(reduction='mean')
 
     logging.info("Loading data")
-    embeddings, _ = load_vectors(args.embedding_path, max_number_words=int(args.maxload))
+    embeddings, words = load_vectors(args.embedding_path, max_number_words=int(args.maxload))
+    idx2word = {idx: word for idx, word in enumerate(words)}
+    word2idx = {word: idx for idx, word in idx2word.items()}
+
+    data = load_20ng_data('./data/evaluation//20ng-train-no-stop.txt').sample(frac=1).reset_index()
+    data_test = load_20ng_data('./data/evaluation/20ng-test-no-stop.txt').sample(frac=0.1).reset_index()
+
+    input_ = preprocess_20ng_data(data, normalize=False, embeddings=embeddings, word2idx=word2idx)
+    input_test = preprocess_20ng_data(data_test, normalize=False, embeddings=embeddings, word2idx=word2idx)
+
     logging.info(f"{embeddings.shape[0]} embeddings loaded")
 
     with open(args.nns_path, 'rb') as file:
         nns = pickle.load(file)
     logging.info(f"{len(nns)} neighbors loaded")
-
-    validation_set = torch.from_numpy(embeddings[-args.val_size:]).float().to(device)
 
     dataset = SiameseDataset(embeddings=torch.from_numpy(embeddings[:-args.val_size]).float().to(device), nns=nns)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
@@ -91,29 +98,36 @@ def train(args):
             optimizer.step()
 
         with torch.no_grad():
+
             model.eval()
 
-            rv1, hv1, bv1, rv2, hv2, bv2 = model(validation_set, validation_set)
+            hidden, binary = model.get_binary_codes(torch.from_numpy(input_).float())
+            binary_input = binary.detach().numpy().astype(np.uint8)
+            hidden, binary = model.get_binary_codes(torch.from_numpy(input_test).float())
+            binary_test = binary.detach().numpy().astype(np.uint8)
 
-            rec_loss = (recon_loss(rv1, validation_set) + recon_loss(rv2, validation_set)) / 2
-            qua_loss = (quantization_loss(hv1) + quantization_loss(hv2)) / 2
-            pre_loss = preservation_loss(bv1, validation_set, bv2, validation_set, code_size=args.bit_size)
+            precisions = []
 
-            val_loss = rec_loss + qua_loss + pre_loss
+            for idx, row in enumerate(binary_test):
+                distances = (row ^ binary_input).sum(axis=1)
+                precisions.append(
+                    (data.iloc[np.argsort(distances)[:100]]['label'] == data_test.iloc[idx]['label']).sum() / 100)
 
-            if val_loss < best_validation:
-                if num_not_improved == 50:
-                    exit(0)
+            val_prec = np.mean(precisions)
 
+            if val_prec > best_validation:
+                num_not_improved = 0
                 logging.info(f"[{epoch + 1}/{args.n_epochs}] Better validation loss found: "
-                             f"recon loss: {round(rec_loss.item(), 4)},"
-                             f"qua loss: {round(qua_loss.item(), 4)},"
-                             f"pre loss: {round(pre_loss.item(), 4)}, saving model")
-                best_validation = val_loss
+                             f"P@100loss: {round(val_prec.item(), 4)} \t saving model")
 
+                best_validation = val_prec
                 torch.save(model, f'./data/models/{model_name}')
             else:
                 num_not_improved += 1
+
+                if num_not_improved == 50:
+                    logging.info("Not increased for 50 epochs, stopping")
+                    exit()
 
 
 if __name__ == "__main__":

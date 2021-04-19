@@ -2,6 +2,7 @@ from typing import List
 
 from torch.utils.data import Dataset
 import numpy as np
+import pandas as pd
 
 
 def load_vectors(embedding_filename: str, max_number_words: int = 2000000):
@@ -47,3 +48,29 @@ class SiameseDataset(Dataset):
 
     def __len__(self):
         return self.embeddings.shape[0]
+
+
+def preprocess_20ng_data(data, word2idx, embeddings, normalize=True):
+    reps = []
+
+    for idx, row in data.iterrows():
+        indices = [word2idx[word] if word in word2idx else 0 for word in row['text'][:1000].split()]
+
+        if len(indices) == 0:
+            reps.append(np.zeros(300))
+        else:
+            reps.append(np.sum([embeddings[index] for index in indices], axis=0))
+
+    input_data = np.vstack(reps)
+
+    if normalize:
+        input_data = input_data / (np.linalg.norm(input_data, axis=1, keepdims=True) + 1e-20)
+
+    return input_data
+
+
+def load_20ng_data(path):
+    data = pd.read_csv(path, sep='\t', header=None)
+    data.columns = ['label', 'text']
+
+    return data
