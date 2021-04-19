@@ -59,7 +59,9 @@ def train(args):
     data_test = load_20ng_data('./data/evaluation/20ng-test-no-stop.txt').sample(frac=0.1).reset_index()
 
     input_ = preprocess_20ng_data(data, normalize=False, embeddings=embeddings, word2idx=word2idx)
+    input_ = torch.from_numpy(input_).float().to(device)
     input_test = preprocess_20ng_data(data_test, normalize=False, embeddings=embeddings, word2idx=word2idx)
+    input_test = torch.from_numpy(input_test).float().to(device)
 
     logging.info(f"{embeddings.shape[0]} embeddings loaded")
 
@@ -101,10 +103,10 @@ def train(args):
 
             model.eval()
 
-            hidden, binary = model.get_binary_codes(torch.from_numpy(input_).float())
-            binary_input = binary.detach().numpy().astype(np.uint8)
-            hidden, binary = model.get_binary_codes(torch.from_numpy(input_test).float())
-            binary_test = binary.detach().numpy().astype(np.uint8)
+            hidden, binary = model.get_binary_codes(input_)
+            binary_input = binary.detach().cpu().numpy().astype(np.uint8)
+            hidden, binary = model.get_binary_codes(input_)
+            binary_test = binary.detach().cpu().numpy().astype(np.uint8)
 
             precisions = []
 
