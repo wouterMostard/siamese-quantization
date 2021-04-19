@@ -105,7 +105,7 @@ def train(args):
 
             hidden, binary = model.get_binary_codes(input_)
             binary_input = binary.detach().cpu().numpy().astype(np.uint8)
-            hidden, binary = model.get_binary_codes(input_)
+            hidden, binary = model.get_binary_codes(input_test)
             binary_test = binary.detach().cpu().numpy().astype(np.uint8)
 
             precisions = []
