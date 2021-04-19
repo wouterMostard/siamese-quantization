@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bit-size", default=256, help="Bit size for the latent layer")
-    parser.add_argument("--lr", default=0.0001, help="Learning rate for the auto-encoders")
+    parser.add_argument("--lr", default=0.001, help="Learning rate for the auto-encoders")
     parser.add_argument("--method", default='siamese', help="Method to learn", choices=["siamese", "auto", "lsh"])
     parser.add_argument("--embedding-path",
                         default="./data/embeddings/crawl-300d-2M.vec",
@@ -37,6 +37,7 @@ def main():
 def train(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     best_validation = float("inf")
+    num_not_improved = 0
 
     if not args.modelname:
         model_name = date.today().strftime("%d-%m-%Y")
@@ -54,12 +55,12 @@ def train(args):
         nns = pickle.load(file)
     logging.info(f"{len(nns)} neighbors loaded")
 
-    validation_set = torch.from_numpy(embeddings[-args.val_size:]).float()
+    validation_set = torch.from_numpy(embeddings[-args.val_size:]).float().to(device)
 
     dataset = SiameseDataset(embeddings=torch.from_numpy(embeddings[:-args.val_size]).float().to(device), nns=nns)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
-    model = SiameseAutoencoder(EMBEDDING_SIZE, args.bit_size)
+    model = SiameseAutoencoder(EMBEDDING_SIZE, args.bit_size).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(args.n_epochs):
@@ -76,6 +77,8 @@ def train(args):
             rec_loss = (recon_loss(r1, x1) + recon_loss(r2, x2)) / 2  # Reconstruction loss
             qua_loss = (quantization_loss(h1) + quantization_loss(h2)) / 2  # Quantization loss
             pre_loss = preservation_loss(b1, x1, b2, x2, code_size=args.bit_size)  # Preserving loss
+
+            # TODO: misschien willen we juist wel soort annealing doen van de quantization loss
 
             total_loss = rec_loss + qua_loss + pre_loss
             total_loss.backward()
@@ -94,6 +97,9 @@ def train(args):
             val_loss = rec_loss + qua_loss + pre_loss
 
             if val_loss < best_validation:
+                if num_not_improved == 50:
+                    exit(0)
+
                 logging.info(f"[{epoch + 1}/{args.n_epochs}] Better validation loss found: "
                              f"recon loss: {round(rec_loss.item(), 4)},"
                              f"qua loss: {round(qua_loss.item(), 4)},"
@@ -101,6 +107,8 @@ def train(args):
                 best_validation = val_loss
 
                 torch.save(model, f'./data/models/{model_name}')
+            else:
+                num_not_improved += 1
 
 
 if __name__ == "__main__":
