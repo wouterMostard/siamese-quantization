@@ -16,18 +16,19 @@ logging.basicConfig(level=logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bit-size", default=256, help="Bit size for the latent layer")
-    parser.add_argument("--lr", default=0.001, help="Learning rate for the auto-encoders")
-    parser.add_argument("--method", default='siamese', help="Method to learn", choices=["siamese", "auto", "lsh"])
+    parser.add_argument("--bit-size", default=256, help="Bit size for the latent layer", type=int)
+    parser.add_argument("--lr", default=0.001, help="Learning rate for the auto-encoders", type=float)
+    parser.add_argument("--method", default='siamese', help="Method to learn", choices=["siamese", "auto", "lsh"], type=str)
     parser.add_argument("--embedding-path",
                         default="./data/embeddings/crawl-300d-2M.vec",
-                        help="Path to embeddings, defaults to fasttext")
-    parser.add_argument("--maxload", help="Maximum load for embeddings", default=100000)
-    parser.add_argument("--batch-size", default=128, help="Batch size")
-    parser.add_argument("--nns-path", default="./data/neighbors/nns100k.pkl")
-    parser.add_argument("--n-epochs", default=100)
-    parser.add_argument("--val-size", default=500)
+                        help="Path to embeddings, defaults to fasttext", type=str)
+    parser.add_argument("--maxload", help="Maximum load for embeddings", default=100000, type=int)
+    parser.add_argument("--batch-size", default=128, help="Batch size", type=str)
+    parser.add_argument("--nns-path", default="./data/neighbors/nns100k.pkl", type=str)
+    parser.add_argument("--n-epochs", default=100, type=int)
+    parser.add_argument("--val-size", default=500, type=int)
     parser.add_argument("--modelname", default=None)
+    parser.add_argument("--use-nn", default=False, type=bool)
 
     args = parser.parse_args()
 
