@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--val-size", default=500, type=int)
     parser.add_argument("--modelname", default=None)
     parser.add_argument("--use-nn", default=False, type=bool)
+    parser.add_argument("--pre-train", default=100, type=int)
 
     args = parser.parse_args()
 
@@ -39,7 +40,7 @@ def train(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     best_validation = float("inf")
     num_not_improved = 0
-    num_pretrain = 50
+    num_pretrain = 100
 
     if not args.modelname:
         model_name = date.today().strftime("%d-%m-%Y")
@@ -80,8 +81,7 @@ def train(args):
             qua_loss = (quantization_loss(h1) + quantization_loss(h2)) / 2  # Quantization loss
             pre_loss = preservation_loss(b1, x1, b2, x2, code_size=args.bit_size)  # Preserving loss
 
-            # TODO: misschien willen we juist wel soort annealing doen van de quantization loss
-            if epoch > num_pretrain:
+            if epoch > args.pre_train:
                 total_loss = rec_loss + qua_loss + pre_loss
             else:
                 total_loss = rec_loss + pre_loss
